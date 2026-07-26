@@ -17,6 +17,16 @@ COPY . .
 # 构建 client
 RUN pnpm --filter @fable/client build
 
+# 编译 shared TypeScript → JS（server 运行时 Node 无法直接加载 .ts）
+RUN npx esbuild packages/shared/src/index.ts \
+    --bundle \
+    --platform=node \
+    --target=es2021 \
+    --format=esm \
+    --external:@dimforge/rapier3d-compat \
+    --outfile=packages/shared/dist/index.mjs \
+ && node -e "const f='packages/shared/package.json';const c=JSON.parse(require('fs').readFileSync(f,'utf8'));c.main='./dist/index.mjs';require('fs').writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
+
 # 用 esbuild CLI 编译 server（显式 experimentalDecorators，绕过 tsx/esbuild 0.28 的 bug）
 RUN npx esbuild packages/server/src/index.ts \
     --bundle \
@@ -45,8 +55,8 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json   packages/server/
 RUN pnpm install --frozen-lockfile --prod
 
-# 复制 shared 源码（workspace 链接需要）和编译好的 server.mjs
-COPY packages/shared/ packages/shared/
+# 复制 shared 源码 + server.mjs 从 builder（shared 含 dist/ 和修改后的 main）
+COPY --from=builder /app/packages/shared/ packages/shared/
 COPY --from=builder /app/packages/server/dist/server.mjs packages/server/dist/server.mjs
 
 # 从 builder 复制 client 构建产物
