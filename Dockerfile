@@ -61,13 +61,14 @@ RUN printf 'server {\n\
  && rm -f /etc/nginx/sites-enabled/default
 
 # ── 启动脚本：动态适配 CloudBase Run 的 PORT 环境变量 ──
+#    绕过 pnpm start（tsx 在 devDependencies 中，--prod 跳过了），直接调全局 tsx
 RUN printf '#!/bin/sh\n\
 LISTEN_PORT=${PORT:-2567}\n\
 echo "[entry] nginx listening on $LISTEN_PORT"\n\
 sed -i "s/listen 2567/listen $LISTEN_PORT/" /etc/nginx/conf.d/default.conf\n\
 nginx\n\
 echo "[entry] Colyseus starting on 2568"\n\
-PORT=2568 exec pnpm --filter @fable/server start\n' > /entrypoint.sh \
+cd /app && PORT=2568 exec tsx packages/server/src/index.ts\n' > /entrypoint.sh \
  && chmod +x /entrypoint.sh
 
 EXPOSE 2567
