@@ -1,4 +1,4 @@
-# ─── Stage 1: 构建 client ───
+# ─── Stage 1: 构建 client + 编译 server ───
 FROM node:22-slim AS builder
 RUN npm install -g pnpm@latest
 WORKDIR /app
@@ -11,14 +11,26 @@ COPY packages/server/package.json   packages/server/
 COPY packages/client/package.json   packages/client/
 RUN pnpm install --frozen-lockfile
 
-# 复制全部源码并构建 client
+# 复制全部源码
 COPY . .
+
+# 构建 client
 RUN pnpm --filter @fable/client build
+
+# 用 esbuild CLI 编译 server（显式 experimentalDecorators，绕过 tsx/esbuild 0.28 的 bug）
+RUN npx esbuild packages/server/src/index.ts \
+    --bundle \
+    --platform=node \
+    --target=es2021 \
+    --format=esm \
+    --packages=external \
+    --tsconfig-raw='{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}' \
+    --outfile=packages/server/dist/server.mjs
 
 # ─── Stage 2: 生产运行 ───
 FROM node:22-slim
 
-# pnpm + tsx + nginx（静态文件服务 + WebSocket 代理）
+# pnpm + nginx
 RUN apt-get update \
  && apt-get install -y nginx \
  && rm -rf /var/lib/apt/lists/* \
@@ -26,27 +38,21 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# 安装依赖（含 tsconfig.base.json，server tsconfig extends 它）
-COPY pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+# 只安装 server 运行时依赖（@colyseus/core 等）
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY package.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json   packages/server/
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --prod
 
-# 复制运行时需要的源码
+# 复制 shared 源码（workspace 链接需要）和编译好的 server.mjs
 COPY packages/shared/ packages/shared/
-COPY packages/server/ packages/server/
-
-# esbuild 在 target>=ES2022 时忽略 experimentalDecorators 用 TC39 新式装饰器，
-# 改 tsconfig.base.json target 为 ES2021 强制旧式（__decorate），兼容 @colyseus/schema。
-RUN node -e "const f='tsconfig.base.json';const c=JSON.parse(require('fs').readFileSync(f,'utf8'));c.compilerOptions.target='ES2021';require('fs').writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
+COPY --from=builder /app/packages/server/dist/server.mjs packages/server/dist/server.mjs
 
 # 从 builder 复制 client 构建产物
 COPY --from=builder /app/packages/client/dist /usr/share/nginx/html
 
-# ── nginx 配置：静态路径精确匹配，其余全部 proxy 到 Colyseus ──
-#   /assets/* + /index.html + /  → 静态文件
-#   其余（/matchmake/* + WebSocket /<pid>/<roomCode>）→ Colyseus:2568
+# ── nginx：静态文件精确匹配，其余全部 proxy 到 Colyseus ──
 RUN printf 'map $http_upgrade $connection_upgrade {\n\
     default upgrade;\n\
     \"\"      close;\n\
@@ -74,14 +80,14 @@ server {\n\
 }\n' > /etc/nginx/conf.d/default.conf \
  && rm -f /etc/nginx/sites-enabled/default
 
-# ── 启动脚本：动态适配 CloudBase Run 的 PORT 环境变量 ──
+# ── 启动脚本 ──
 RUN printf '#!/bin/sh\n\
 LISTEN_PORT=${PORT:-5173}\n\
 echo "[entry] nginx listening on $LISTEN_PORT"\n\
 sed -i "s/listen 5173/listen $LISTEN_PORT/" /etc/nginx/conf.d/default.conf\n\
 nginx\n\
 echo "[entry] Colyseus starting on 2568"\n\
-PORT=2568 exec pnpm --filter @fable/server start\n' > /entrypoint.sh \
+cd /app && PORT=2568 exec node packages/server/dist/server.mjs\n' > /entrypoint.sh \
  && chmod +x /entrypoint.sh
 
 EXPOSE 5173
