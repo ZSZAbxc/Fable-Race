@@ -44,22 +44,32 @@ RUN node -e "const f='tsconfig.base.json';const c=JSON.parse(require('fs').readF
 # 从 builder 复制 client 构建产物
 COPY --from=builder /app/packages/client/dist /usr/share/nginx/html
 
-# ── nginx 配置：单端口同时服务 HTTP 与 WebSocket ──
-#   /            → 静态文件（SPA fallback）
-#   /matchmake/  → proxy 到 Colyseus（WebSocket upgrade）
-RUN printf 'server {\n\
+# ── nginx 配置：静态路径精确匹配，其余全部 proxy 到 Colyseus ──
+#   /assets/* + /index.html + /  → 静态文件
+#   其余（/matchmake/* + WebSocket /<pid>/<roomCode>）→ Colyseus:2568
+RUN printf 'map $http_upgrade $connection_upgrade {\n\
+    default upgrade;\n\
+    \"\"      close;\n\
+}\n\
+server {\n\
     listen 5173;\n\
-    root /usr/share/nginx/html;\n\
-    index index.html;\n\
-    location /matchmake/ {\n\
+    location /assets/ {\n\
+        root /usr/share/nginx/html;\n\
+    }\n\
+    location = /index.html {\n\
+        root /usr/share/nginx/html;\n\
+    }\n\
+    location = / {\n\
+        root /usr/share/nginx/html;\n\
+        try_files /index.html =404;\n\
+    }\n\
+    location / {\n\
         proxy_pass http://127.0.0.1:2568;\n\
         proxy_http_version 1.1;\n\
         proxy_set_header Upgrade $http_upgrade;\n\
-        proxy_set_header Connection "upgrade";\n\
+        proxy_set_header Connection $connection_upgrade;\n\
         proxy_set_header Host $host;\n\
-    }\n\
-    location / {\n\
-        try_files $uri $uri/ /index.html;\n\
+        proxy_read_timeout 86400s;\n\
     }\n\
 }\n' > /etc/nginx/conf.d/default.conf \
  && rm -f /etc/nginx/sites-enabled/default
