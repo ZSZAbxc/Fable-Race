@@ -26,8 +26,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# 只安装生产依赖
-COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+# 安装依赖（含 tsconfig.base.json，server tsconfig extends 它）
+COPY pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY package.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json   packages/server/
@@ -37,14 +37,14 @@ RUN pnpm install --frozen-lockfile
 COPY packages/shared/ packages/shared/
 COPY packages/server/ packages/server/
 
-# esbuild 在 target>=ES2022 时会用 TC39 新式装饰器（__decorateElement），
-# 而 @colyseus/schema 需要旧式（__decorate）。降 target 到 ES2021 强制旧式。
-RUN node -e "const f='packages/server/tsconfig.json';const c=JSON.parse(require('fs').readFileSync(f,'utf8'));c.compilerOptions.target='ES2021';require('fs').writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
+# esbuild 在 target>=ES2022 时忽略 experimentalDecorators 用 TC39 新式装饰器，
+# 改 tsconfig.base.json target 为 ES2021 强制旧式（__decorate），兼容 @colyseus/schema。
+RUN node -e "const f='tsconfig.base.json';const c=JSON.parse(require('fs').readFileSync(f,'utf8'));c.compilerOptions.target='ES2021';require('fs').writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
 
 # 从 builder 复制 client 构建产物
 COPY --from=builder /app/packages/client/dist /usr/share/nginx/html
 
-# ── nginx 配置：单端口 2567 同时服务 HTTP 与 WebSocket ──
+# ── nginx 配置：单端口同时服务 HTTP 与 WebSocket ──
 #   /            → 静态文件（SPA fallback）
 #   /matchmake/  → proxy 到 Colyseus（WebSocket upgrade）
 RUN printf 'server {\n\
