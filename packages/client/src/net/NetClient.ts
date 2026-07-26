@@ -14,7 +14,9 @@ export class NetClient {
 
   constructor() {
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    const endpoint = `${proto}://${location.hostname}:${DEFAULT_SERVER_PORT}`;
+    const endpoint = location.port
+      ? `${proto}://${location.hostname}:${location.port}`
+      : `${proto}://${location.hostname}`;
     this.client = new Client(endpoint);
   }
 
