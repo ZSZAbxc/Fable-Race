@@ -24,7 +24,6 @@ RUN npx esbuild packages/server/src/index.ts \
     --external:@colyseus/core \
     --external:@colyseus/schema \
     --external:@colyseus/ws-transport \
-    --external:@dimforge/rapier3d-compat \
     --tsconfig-raw='{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}' \
     --outfile=packages/server/dist/server.mjs
 
@@ -44,8 +43,6 @@ COPY package.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json   packages/server/
 RUN pnpm install --frozen-lockfile
-# esbuild external 保留了 rapier 的 import，确保它被安装
-RUN node -e "require('child_process').execSync('npm install @dimforge/rapier3d-compat --no-save',{cwd:'/app',stdio:'inherit'})"
 
 # 复制编译好的 server.mjs（shared 已内联，无需额外依赖）
 COPY --from=builder /app/packages/server/dist/server.mjs packages/server/dist/server.mjs
