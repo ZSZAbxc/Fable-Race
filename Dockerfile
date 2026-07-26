@@ -22,7 +22,7 @@ FROM node:24-slim
 RUN apt-get update \
  && apt-get install -y nginx \
  && rm -rf /var/lib/apt/lists/* \
- && npm install -g pnpm@latest tsx
+ && npm install -g pnpm@latest
 
 WORKDIR /app
 
@@ -31,7 +31,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY package.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json   packages/server/
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile
 
 # 复制运行时需要的源码
 COPY packages/shared/ packages/shared/
@@ -61,14 +61,13 @@ RUN printf 'server {\n\
  && rm -f /etc/nginx/sites-enabled/default
 
 # ── 启动脚本：动态适配 CloudBase Run 的 PORT 环境变量 ──
-#    绕过 pnpm start（tsx 在 devDependencies 中，--prod 跳过了），直接调全局 tsx
 RUN printf '#!/bin/sh\n\
 LISTEN_PORT=${PORT:-5173}\n\
 echo "[entry] nginx listening on $LISTEN_PORT"\n\
 sed -i "s/listen 5173/listen $LISTEN_PORT/" /etc/nginx/conf.d/default.conf\n\
 nginx\n\
 echo "[entry] Colyseus starting on 2568"\n\
-cd /app && PORT=2568 exec tsx packages/server/src/index.ts\n' > /entrypoint.sh \
+PORT=2568 exec pnpm --filter @fable/server start\n' > /entrypoint.sh \
  && chmod +x /entrypoint.sh
 
 EXPOSE 5173
