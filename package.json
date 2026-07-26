@@ -1,0 +1,11 @@
+{
+  "name": "fable-race",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "build": "pnpm -r build",
+    "check": "pnpm -r check",
+    "smoke": "pnpm --filter @fable/shared smoke && pnpm --filter @fable/server smoke"
+  }
+}

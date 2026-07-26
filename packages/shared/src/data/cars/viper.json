@@ -1,0 +1,58 @@
+{
+  "id": "viper",
+  "name": "蝰蛇 Viper",
+  "color": "#2ecc71",
+  "chassis": {
+    "halfExtents": [0.88, 0.33, 1.82],
+    "mass": 950,
+    "centerOfMassY": -0.12
+  },
+  "drivetrain": "RWD",
+  "engine": {
+    "maxForce": 8600,
+    "maxSpeedKmh": 178,
+    "reverseMaxSpeedKmh": 35,
+    "brakeForce": 50,
+    "handbrakeForce": 100,
+    "coastBrake": 9
+  },
+  "steering": {
+    "maxAngleDeg": 30,
+    "highSpeedAngleDeg": 10,
+    "fullSteerBelowKmh": 25,
+    "minSteerAboveKmh": 118,
+    "lerpRate": 6
+  },
+  "wheels": {
+    "radius": 0.34,
+    "width": 0.26,
+    "frontZ": 1.28,
+    "rearZ": -1.28,
+    "halfTrack": 0.8,
+    "connectionY": -0.05
+  },
+  "suspension": {
+    "restLength": 0.4,
+    "travel": 0.26,
+    "stiffness": 36,
+    "compression": 3.2,
+    "relaxation": 2.6,
+    "maxForce": 21000
+  },
+  "friction": {
+    "slip": 3.9,
+    "sideStiffness": 0.95
+  },
+  "drift": {
+    "rearSideStiffness": 0.055,
+    "frontSideStiffness": 0.2,
+    "yawTorque": 6900,
+    "maxYawRate": 1.55,
+    "brake": 3.5,
+    "engineScale": 0.55,
+    "minSpeedKmh": 15
+  },
+  "aero": {
+    "downforce": 3.2
+  }
+}

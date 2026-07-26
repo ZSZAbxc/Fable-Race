@@ -1,0 +1,58 @@
+{
+  "id": "bison",
+  "name": "野牛 Bison",
+  "color": "#3498db",
+  "chassis": {
+    "halfExtents": [0.98, 0.4, 1.95],
+    "mass": 1320,
+    "centerOfMassY": -0.15
+  },
+  "drivetrain": "AWD",
+  "engine": {
+    "maxForce": 12400,
+    "maxSpeedKmh": 152,
+    "reverseMaxSpeedKmh": 32,
+    "brakeForce": 62,
+    "handbrakeForce": 120,
+    "coastBrake": 12
+  },
+  "steering": {
+    "maxAngleDeg": 26,
+    "highSpeedAngleDeg": 9,
+    "fullSteerBelowKmh": 28,
+    "minSteerAboveKmh": 105,
+    "lerpRate": 4.5
+  },
+  "wheels": {
+    "radius": 0.38,
+    "width": 0.34,
+    "frontZ": 1.35,
+    "rearZ": -1.35,
+    "halfTrack": 0.9,
+    "connectionY": -0.05
+  },
+  "suspension": {
+    "restLength": 0.44,
+    "travel": 0.3,
+    "stiffness": 30,
+    "compression": 3.4,
+    "relaxation": 2.8,
+    "maxForce": 28000
+  },
+  "friction": {
+    "slip": 5.4,
+    "sideStiffness": 1.12
+  },
+  "drift": {
+    "rearSideStiffness": 0.1,
+    "frontSideStiffness": 0.3,
+    "yawTorque": 5800,
+    "maxYawRate": 1.25,
+    "brake": 5,
+    "engineScale": 0.5,
+    "minSpeedKmh": 15
+  },
+  "aero": {
+    "downforce": 5.0
+  }
+}

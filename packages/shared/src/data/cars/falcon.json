@@ -1,0 +1,58 @@
+{
+  "id": "falcon",
+  "name": "猎鹰 Falcon",
+  "color": "#e84118",
+  "chassis": {
+    "halfExtents": [0.92, 0.36, 1.9],
+    "mass": 1100,
+    "centerOfMassY": -0.12
+  },
+  "drivetrain": "RWD",
+  "engine": {
+    "maxForce": 9500,
+    "maxSpeedKmh": 165,
+    "reverseMaxSpeedKmh": 35,
+    "brakeForce": 55,
+    "handbrakeForce": 110,
+    "coastBrake": 10
+  },
+  "steering": {
+    "maxAngleDeg": 28,
+    "highSpeedAngleDeg": 9.5,
+    "fullSteerBelowKmh": 25,
+    "minSteerAboveKmh": 110,
+    "lerpRate": 5
+  },
+  "wheels": {
+    "radius": 0.36,
+    "width": 0.3,
+    "frontZ": 1.32,
+    "rearZ": -1.32,
+    "halfTrack": 0.84,
+    "connectionY": -0.05
+  },
+  "suspension": {
+    "restLength": 0.42,
+    "travel": 0.28,
+    "stiffness": 34,
+    "compression": 3.2,
+    "relaxation": 2.6,
+    "maxForce": 24000
+  },
+  "friction": {
+    "slip": 4.5,
+    "sideStiffness": 1.0
+  },
+  "drift": {
+    "rearSideStiffness": 0.07,
+    "frontSideStiffness": 0.22,
+    "yawTorque": 6500,
+    "maxYawRate": 1.4,
+    "brake": 4,
+    "engineScale": 0.5,
+    "minSpeedKmh": 15
+  },
+  "aero": {
+    "downforce": 4.0
+  }
+}

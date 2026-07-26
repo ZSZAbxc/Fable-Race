@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- 禁缩放 + 刘海安全区：移动端操控要靠固定按钮位，双指缩放会毁掉手感 -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Fable Race</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #0b0e14;
+        font-family: "Consolas", "Microsoft YaHei", monospace;
+        user-select: none;
+        -webkit-user-select: none;
+        /* 移动端：禁下拉刷新/双击缩放/长按选中/点击高亮 */
+        touch-action: none;
+        overscroll-behavior: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      canvas {
+        display: block;
+      }
+      #hud {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        color: #fff;
+      }
+      #speed {
+        position: absolute;
+        right: 28px;
+        bottom: 22px;
+        font-size: 52px;
+        font-weight: 700;
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+      }
+      #speed span {
+        font-size: 18px;
+        font-weight: 400;
+        opacity: 0.7;
+      }
+      #help {
+        position: absolute;
+        left: 20px;
+        bottom: 18px;
+        font-size: 13px;
+        line-height: 1.7;
+        opacity: 0.75;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+      }
+
+      /* ---- 触屏操控 ---- */
+      #touch {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        /* 刘海/圆角安全区 */
+        padding: env(safe-area-inset-top) env(safe-area-inset-right)
+          env(safe-area-inset-bottom) env(safe-area-inset-left);
+      }
+      .tbtn {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        /* HUD 整层不吃事件，交互元素各自开 */
+        pointer-events: auto;
+        touch-action: none;
+        color: #eaf0ff;
+        font-family: inherit;
+        font-weight: 700;
+        background: rgba(18, 22, 32, 0.42);
+        border: 2px solid rgba(255, 255, 255, 0.22);
+        backdrop-filter: blur(4px);
+        border-radius: 50%;
+        transition: background 90ms, transform 90ms;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .tbtn.on {
+        background: rgba(90, 150, 255, 0.6);
+        border-color: rgba(180, 210, 255, 0.75);
+        transform: scale(0.94);
+      }
+      #t-left,
+      #t-right {
+        position: absolute;
+        bottom: 0;
+        width: 50%;
+        height: 60%;
+        pointer-events: none;
+      }
+      #t-left {
+        left: 0;
+      }
+      #t-right {
+        right: 0;
+      }
+      /* 左下：前进/后退竖排 + 漂移在侧 */
+      .tb-go,
+      .tb-back {
+        left: 34px;
+        width: 92px;
+        height: 92px;
+        font-size: 30px;
+      }
+      .tb-go {
+        bottom: 132px;
+      }
+      .tb-back {
+        bottom: 28px;
+      }
+      .tb-drift {
+        left: 140px;
+        bottom: 68px;
+        width: 86px;
+        height: 86px;
+        font-size: 19px;
+        border-color: rgba(255, 190, 120, 0.4);
+      }
+      .tb-drift.on {
+        background: rgba(255, 160, 60, 0.62);
+        border-color: rgba(255, 215, 165, 0.8);
+      }
+      /* 右下：左右并排 */
+      .tb-steer {
+        bottom: 40px;
+        width: 100px;
+        height: 100px;
+        font-size: 32px;
+      }
+      .tb-steer[data-act="left"] {
+        right: 156px;
+      }
+      .tb-steer[data-act="right"] {
+        right: 34px;
+      }
+      /* 左上：复位 */
+      #t-reset {
+        left: 20px;
+        top: 62px;
+        width: 62px;
+        height: 62px;
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      /* 小屏 HUD 瘦身：默认字号是按桌面定的，手机上会挤满屏 */
+      @media (max-width: 900px), (max-height: 520px) {
+        #speed {
+          font-size: 34px;
+          right: 18px;
+          bottom: 14px;
+        }
+        #lap {
+          font-size: 20px;
+        }
+        #race {
+          font-size: 13px;
+          top: 52px;
+        }
+        .prox-back {
+          font-size: 18px;
+          padding: 4px 12px;
+          gap: 9px;
+        }
+        .prox-back .pb-dot {
+          width: 10px;
+          height: 10px;
+        }
+        #banner {
+          font-size: 26px;
+        }
+        /* 键盘说明在触屏上没意义，且正好压在按钮区 */
+        #help {
+          display: none;
+        }
+      }
+      /* 窄屏再收一档按钮尺寸，避免左右两组打架 */
+      @media (max-width: 720px) {
+        .tb-go,
+        .tb-back {
+          width: 76px;
+          height: 76px;
+          left: 22px;
+        }
+        .tb-go {
+          bottom: 110px;
+        }
+        .tb-back {
+          bottom: 22px;
+        }
+        .tb-drift {
+          left: 108px;
+          bottom: 54px;
+          width: 72px;
+          height: 72px;
+          font-size: 16px;
+        }
+        .tb-steer {
+          width: 84px;
+          height: 84px;
+          bottom: 30px;
+        }
+        .tb-steer[data-act="left"] {
+          right: 126px;
+        }
+        .tb-steer[data-act="right"] {
+          right: 22px;
+        }
+      }
+      #race {
+        display: none;
+        position: absolute;
+        left: 20px;
+        /* 给左上角的"返回主界面"按钮让出位置 */
+        top: 58px;
+        text-shadow: 0 1px 5px rgba(0, 0, 0, 0.7);
+      }
+      #lap {
+        font-size: 26px;
+        font-weight: 700;
+      }
+      #time-cur {
+        font-size: 34px;
+        font-weight: 700;
+        margin: 2px 0;
+      }
+      #time-last,
+      #time-best {
+        font-size: 14px;
+        opacity: 0.85;
+      }
+      /* ---- 近距玩家提示（仅多人模式） ---- */
+      /* 前方名牌：JS 每帧写 transform 定位，容器本身不拦事件 */
+      #prox-ahead {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .prox-tag {
+        position: absolute;
+        left: 0;
+        top: 0;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 11px;
+        border-radius: 8px;
+        /* 半透明底框 */
+        background: rgba(10, 12, 18, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        backdrop-filter: blur(3px);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+        white-space: nowrap;
+        /* 缩放围绕底边中点，名牌底部始终贴着车顶 */
+        transform-origin: 50% 100%;
+        will-change: transform;
+      }
+      .prox-tag .pt-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+        flex: none;
+      }
+      .prox-tag .pt-name {
+        font-size: 21px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.75);
+      }
+      .prox-tag .pt-d {
+        font-size: 14px;
+        font-weight: 600;
+        opacity: 0.72;
+      }
+      /* 后方条：底部居中，避开右下角的速度表 */
+      #prox-behind {
+        position: absolute;
+        left: 50%;
+        bottom: 18px;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        pointer-events: none;
+      }
+      .prox-back {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 6px 20px;
+        border-radius: 14px;
+        /* 半透明底框 */
+        background: rgba(10, 12, 18, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(3px);
+        font-size: 28px;
+        white-space: nowrap;
+      }
+      .prox-back .pb-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .prox-back .pb-name {
+        font-weight: 600;
+      }
+      .prox-back .pb-d {
+        font-weight: 600;
+        opacity: 0.75;
+      }
+      .prox-back .pb-arrow {
+        opacity: 0.65;
+      }
+      #banner {
+        position: absolute;
+        left: 50%;
+        top: 16%;
+        transform: translateX(-50%);
+        font-size: 26px;
+        font-weight: 700;
+        white-space: nowrap;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+        opacity: 0;
+        transition: opacity 0.35s;
+      }
+      #maps {
+        position: absolute;
+        right: 20px;
+        /* 给右上角的设置齿轮让出位置 */
+        top: 58px;
+        text-align: right;
+        font-size: 13px;
+        pointer-events: auto;
+      }
+      #maps a {
+        display: block;
+        color: #cfe0ff;
+        text-decoration: none;
+        opacity: 0.8;
+        margin-bottom: 4px;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+      }
+      #maps a:hover {
+        opacity: 1;
+        text-decoration: underline;
+      }
+      #maps a.active {
+        color: #ffd23e;
+        opacity: 1;
+      }
+      #maps .room-tag {
+        color: #ffd23e;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+      }
+      #loading {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9aa4b2;
+        font-size: 16px;
+        background: #0b0e14;
+      }
+
+      /* ===== 菜单 / 大厅 ===== */
+      .overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(ellipse at 50% 30%, #1a2233 0%, #0b0e14 70%);
+        z-index: 10;
+      }
+      .panel {
+        width: 360px;
+        padding: 28px 32px;
+        background: rgba(18, 24, 38, 0.92);
+        border: 1px solid #2c3a55;
+        border-radius: 12px;
+        color: #e8eefb;
+        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+      }
+      .panel h1 {
+        margin: 0 0 4px;
+        font-size: 30px;
+        letter-spacing: 3px;
+        color: #ffd23e;
+      }
+      .panel h2 {
+        margin: 0 0 12px;
+        font-size: 20px;
+      }
+      .panel .sub {
+        font-size: 12px;
+        opacity: 0.6;
+        margin-bottom: 18px;
+      }
+      .panel label {
+        display: block;
+        font-size: 13px;
+        margin: 12px 0 6px;
+        opacity: 0.85;
+      }
+      .panel input,
+      .panel select {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 10px;
+        background: #0e1420;
+        color: #e8eefb;
+        border: 1px solid #33415e;
+        border-radius: 6px;
+        font-family: inherit;
+        font-size: 14px;
+        outline: none;
+      }
+      .panel input:focus,
+      .panel select:focus {
+        border-color: #5a7fc0;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .row > * {
+        flex: 1;
+      }
+      .panel button {
+        padding: 9px 12px;
+        background: #2d4a7a;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        font-family: inherit;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .panel button:hover {
+        background: #3a5d96;
+      }
+      .panel button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      .panel button.primary {
+        background: #c8531f;
+      }
+      .panel button.primary:hover {
+        background: #e05f24;
+      }
+      .panel hr {
+        border: none;
+        border-top: 1px solid #2c3a55;
+        margin: 18px 0 8px;
+      }
+      #m-colors {
+        display: flex;
+        gap: 7px;
+        margin-top: 6px;
+      }
+      .swatch {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid transparent;
+        box-sizing: border-box;
+      }
+      .swatch.sel {
+        border-color: #fff;
+        transform: scale(1.12);
+      }
+      #m-cars {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .car-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid #2c3a55;
+        background: #16203a;
+        cursor: pointer;
+      }
+      .car-card:hover {
+        border-color: #46618f;
+      }
+      .car-card.sel {
+        border-color: #f2762e;
+        background: #1d2946;
+      }
+      .car-card .cc-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .car-card .cc-name {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .car-card .cc-tag {
+        font-size: 11px;
+        color: #8ea2c4;
+        margin-top: 2px;
+      }
+      .car-card .cc-bars {
+        display: grid;
+        grid-template-columns: auto 62px;
+        gap: 2px 5px;
+        align-items: center;
+      }
+      .car-card .cc-bars span {
+        font-size: 10px;
+        color: #8ea2c4;
+      }
+      .car-card .cc-bar {
+        height: 5px;
+        border-radius: 3px;
+        background: #24314f;
+        overflow: hidden;
+      }
+      .car-card .cc-bar i {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, #f2762e, #ffd23e);
+      }
+      /* ===== 一级：模式卡片 ===== */
+      .mode-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 22px;
+      }
+      .mode-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 16px 14px !important;
+        text-align: left;
+        background: #16203a !important;
+        border: 1px solid #2c3a55 !important;
+        border-radius: 10px !important;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s, transform 0.15s;
+      }
+      .mode-card:hover {
+        background: #1d2946 !important;
+        border-color: #f2762e !important;
+        transform: translateX(2px);
+      }
+      .mode-card .mc-icon {
+        font-size: 26px;
+        line-height: 1;
+        flex: none;
+      }
+      .mode-card .mc-text {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        flex: 1;
+        min-width: 0;
+      }
+      .mode-card .mc-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #e8eefb;
+      }
+      .mode-card .mc-desc {
+        font-size: 11px;
+        color: #8ea2c4;
+        white-space: normal;
+      }
+      .mode-card .mc-arrow {
+        font-size: 22px;
+        color: #5a7fc0;
+        flex: none;
+      }
+
+      /* ===== 二级页头（返回箭头 + 标题） ===== */
+      .phead {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .phead h2 {
+        margin: 0 !important;
+      }
+      .back-btn {
+        width: 28px;
+        height: 28px;
+        padding: 0 !important;
+        flex: none;
+        font-size: 20px;
+        line-height: 1;
+        background: #24314f !important;
+        border-radius: 6px !important;
+      }
+      .back-btn:hover {
+        background: #33456b !important;
+      }
+      .or-sep {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 12px 0 2px;
+        font-size: 11px;
+        color: #6d7c96;
+      }
+      .or-sep::before,
+      .or-sep::after {
+        content: "";
+        flex: 1;
+        border-top: 1px solid #2c3a55;
+      }
+
+      /* ===== 游戏内：返回主界面 ===== */
+      #quit {
+        display: none;
+        position: absolute;
+        left: 20px;
+        top: 18px;
+        padding: 7px 12px;
+        font-family: inherit;
+        font-size: 12px;
+        color: #cfe0ff;
+        background: rgba(18, 24, 38, 0.78);
+        border: 1px solid #2c3a55;
+        border-radius: 6px;
+        cursor: pointer;
+        pointer-events: auto;
+        z-index: 5;
+      }
+      #quit:hover {
+        color: #fff;
+        background: rgba(40, 54, 84, 0.92);
+        border-color: #46618f;
+      }
+      /* ===== 设置（任意界面可开的二级浮层） ===== */
+      /* 齿轮常驻右上；z-index 高于菜单/大厅/结算(10)，保证各界面都点得到 */
+      #gear {
+        position: fixed;
+        right: 18px;
+        top: 16px;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        font-size: 17px;
+        line-height: 34px;
+        text-align: center;
+        color: #cfe0ff;
+        background: rgba(18, 24, 38, 0.78);
+        border: 1px solid #2c3a55;
+        border-radius: 8px;
+        cursor: pointer;
+        pointer-events: auto;
+        z-index: 20;
+      }
+      #gear:hover {
+        color: #fff;
+        background: rgba(40, 54, 84, 0.92);
+        border-color: #46618f;
+      }
+      /* 设置浮层压在齿轮之上，避免点开后齿轮浮在遮罩上方 */
+      #settings {
+        z-index: 30;
+        background: rgba(6, 9, 15, 0.72);
+      }
+      #settings .panel {
+        width: 330px;
+      }
+      .set-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 8px;
+      }
+      /* 滑条：跨浏览器需要分别写 webkit / moz 的轨道与滑块 */
+      #s-vol {
+        flex: 1;
+        padding: 0 !important;
+        height: 6px;
+        border: none !important;
+        border-radius: 3px !important;
+        background: #24314f !important;
+        appearance: none;
+        -webkit-appearance: none;
+        cursor: pointer;
+      }
+      #s-vol::-webkit-slider-thumb {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 17px;
+        height: 17px;
+        border-radius: 50%;
+        background: #f2762e;
+        border: 2px solid #ffd7b8;
+        box-sizing: border-box;
+        cursor: pointer;
+      }
+      #s-vol::-moz-range-thumb {
+        width: 17px;
+        height: 17px;
+        border: 2px solid #ffd7b8;
+        border-radius: 50%;
+        background: #f2762e;
+        box-sizing: border-box;
+        cursor: pointer;
+      }
+      #s-vol:focus {
+        border: none !important;
+      }
+      #s-vol:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      #s-vol-num {
+        width: 46px;
+        flex: none;
+        text-align: right;
+        font-size: 14px;
+        font-variant-numeric: tabular-nums;
+        color: #ffd23e;
+      }
+      #s-mute {
+        flex: none;
+        width: 100%;
+      }
+      #s-mute.on {
+        background: #7a3b23 !important;
+      }
+      #s-mute.on:hover {
+        background: #96492b !important;
+      }
+      .err {
+        color: #ff7a6b;
+        font-size: 12px;
+        min-height: 16px;
+        margin-top: 10px;
+      }
+      #l-code {
+        color: #ffd23e;
+        letter-spacing: 4px;
+        font-size: 24px;
+      }
+      #l-players {
+        margin: 12px 0;
+        min-height: 96px;
+      }
+      .lp {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 2px;
+        font-size: 14px;
+      }
+      .lp .dot {
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .lp .tag {
+        font-size: 11px;
+        opacity: 0.65;
+      }
+      .lp .carn {
+        font-size: 11px;
+        color: #8ea2c4;
+        padding: 1px 6px;
+        border: 1px solid #2c3a55;
+        border-radius: 10px;
+      }
+      .lp .rd {
+        margin-left: auto;
+        font-size: 12px;
+        color: #6fdb8c;
+      }
+      .lp .rd.no {
+        color: #8a94a6;
+      }
+      .hint {
+        font-size: 12px;
+        opacity: 0.6;
+        margin-top: 10px;
+        min-height: 16px;
+      }
+      #rank {
+        display: none;
+        font-size: 20px;
+        font-weight: 700;
+        color: #ffd23e;
+        margin-top: 4px;
+      }
+      #results .panel {
+        width: 420px;
+      }
+      .res-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 6px;
+        font-size: 15px;
+        border-bottom: 1px solid #223050;
+      }
+      .res-row .pos {
+        width: 26px;
+        font-size: 18px;
+        font-weight: 700;
+        color: #ffd23e;
+      }
+      .res-row .dot {
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .res-row .times {
+        margin-left: auto;
+        text-align: right;
+        font-size: 13px;
+        opacity: 0.9;
+      }
+      .res-row .times .best {
+        font-size: 11px;
+        opacity: 0.65;
+      }
+      .res-row.me {
+        background: rgba(255, 210, 62, 0.08);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading">加载物理引擎…</div>
+
+    <!-- 主菜单：三级页面（主页 / 单人 / 多人），同一时刻只显示一页 -->
+    <div id="menu" class="overlay" style="display: none">
+      <!-- 一级：模式选择 -->
+      <div class="panel" id="m-home">
+        <h1>FABLE RACE</h1>
+        <div class="sub">Powered by Fable5</div>
+        <div class="mode-list">
+          <button class="mode-card" id="m-go-solo">
+            <span class="mc-icon">🏁</span>
+            <span class="mc-text">
+              <span class="mc-title">单人模式</span>
+              <span class="mc-desc">独自跑图刷圈速，或去试车场调手感</span>
+            </span>
+            <span class="mc-arrow">›</span>
+          </button>
+          <button class="mode-card" id="m-go-multi">
+            <span class="mc-icon">🎮</span>
+            <span class="mc-text">
+              <span class="mc-title">多人模式</span>
+              <span class="mc-desc">建房或用房间码加入，和朋友同场竞速</span>
+            </span>
+            <span class="mc-arrow">›</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 二级：单人模式 -->
+      <div class="panel" id="m-solo" style="display: none">
+        <div class="phead">
+          <button class="back-btn" id="m-solo-back" aria-label="返回主页">‹</button>
+          <h2>单人模式</h2>
+        </div>
+        <div class="sub">选车、选图，直接出发</div>
+        <div id="m-solo-driver"></div>
+        <hr />
+        <label>赛道</label>
+        <select id="m-map"></select>
+        <div class="row">
+          <button id="m-practice" class="primary">出发</button>
+        </div>
+      </div>
+
+      <!-- 二级：多人模式 -->
+      <div class="panel" id="m-multi" style="display: none">
+        <div class="phead">
+          <button class="back-btn" id="m-multi-back" aria-label="返回主页">‹</button>
+          <h2>多人模式</h2>
+        </div>
+        <div class="sub">创建房间当房主，或输入 4 位房间码加入</div>
+        <div id="m-multi-driver"></div>
+        <hr />
+        <div class="row">
+          <button id="m-create" class="primary">创建联机房间</button>
+        </div>
+        <div class="or-sep"><span>或</span></div>
+        <div class="row">
+          <input id="m-code" maxlength="4" placeholder="房间码" style="text-transform: uppercase" />
+          <button id="m-join">加入房间</button>
+        </div>
+        <div id="m-error" class="err"></div>
+      </div>
+
+      <!-- 车手设置（昵称/涂装/赛车）：单人与多人共用，运行时移入当前页 -->
+      <div id="m-driver" style="display: none">
+        <label>昵称</label>
+        <input id="m-name" maxlength="12" placeholder="车手名" />
+        <label>涂装颜色</label>
+        <div id="m-colors"></div>
+        <label>赛车</label>
+        <div id="m-cars"></div>
+      </div>
+    </div>
+
+    <!-- 大厅 -->
+    <div id="lobby" class="overlay" style="display: none">
+      <div class="panel">
+        <h2>房间码 <span id="l-code"></span></h2>
+        <div class="sub">把房间码发给朋友，同一局域网/服务器即可加入</div>
+        <div id="l-players"></div>
+        <label>赛道（房主选择）</label>
+        <select id="l-map"></select>
+        <div class="row">
+          <button id="l-ready">准备</button>
+          <button id="l-start" class="primary">开始比赛</button>
+        </div>
+        <div class="row">
+          <button id="l-leave">离开房间</button>
+        </div>
+        <div id="l-hint" class="hint"></div>
+      </div>
+    </div>
+
+    <!-- 结算 -->
+    <div id="results" class="overlay" style="display: none">
+      <div class="panel">
+        <h2 id="r-title">比赛结束</h2>
+        <div class="sub" id="r-sub"></div>
+        <div id="r-list"></div>
+        <div class="row">
+          <button id="r-again" class="primary">再来一局</button>
+          <button id="r-leave">离开房间</button>
+        </div>
+        <div id="r-hint" class="hint"></div>
+      </div>
+    </div>
+
+    <!-- 设置：齿轮 + 浮层，独立于 #hud，任意界面都可开 -->
+    <button id="gear" title="设置（Esc）" aria-label="设置">⚙</button>
+    <div id="settings" class="overlay" style="display: none" role="dialog" aria-modal="true" aria-labelledby="s-title">
+      <div class="panel">
+        <div class="phead">
+          <button class="back-btn" id="s-close" aria-label="关闭设置">‹</button>
+          <h2 id="s-title">设置</h2>
+        </div>
+        <div class="sub">音量对所有声音生效，设置会自动保存</div>
+        <label for="s-vol">总音量</label>
+        <div class="set-row">
+          <input id="s-vol" type="range" min="0" max="100" step="1" value="70" />
+          <span id="s-vol-num">70%</span>
+        </div>
+        <div class="set-row">
+          <button id="s-mute" aria-pressed="false">静音</button>
+        </div>
+        <hr />
+        <label for="s-touch">屏幕操作按键</label>
+        <div class="sub">默认只在触屏设备显示；PC 上误显示时可在此关闭</div>
+        <div class="set-row">
+          <button id="s-touch" aria-pressed="false">隐藏</button>
+          <span id="s-touch-num"></span>
+        </div>
+        <hr />
+        <div class="hint">Esc 开关设置 · M 快速静音</div>
+      </div>
+    </div>
+
+    <!-- 游戏 HUD -->
+    <div id="hud">
+      <button id="quit">‹ 返回主界面</button>
+      <div id="race">
+        <div id="lap">圈 1 / 3</div>
+        <div id="time-cur">--:--.---</div>
+        <div id="time-last">上圈 --:--.---</div>
+        <div id="time-best">最佳 --:--.---</div>
+        <div id="rank">名次 - / -</div>
+      </div>
+      <div id="banner"></div>
+      <!-- 近距玩家提示（仅多人）：前方投影名牌 + 后方底部条 -->
+      <div id="prox-ahead"></div>
+      <div id="prox-behind"></div>
+      <div id="maps"></div>
+      <div id="speed">0<span> km/h</span></div>
+      <div id="help">
+        W/↑ 油门 · S/↓ 刹车/倒车 · A D/← → 转向 · 空格 手刹漂移 · R 回最近检查点（坠落自动）<br />
+        调手感：改 packages/shared/src/data/cars/falcon.json，保存即生效
+      </div>
+      <!-- 触屏操控（仅粗指针设备显示，TouchControls 负责绑定） -->
+      <div id="touch" style="display: none">
+        <button id="t-reset" class="tbtn" data-act="reset" aria-label="复位">⟲</button>
+        <div id="t-left">
+          <button class="tbtn tb-drift" data-act="handbrake" aria-label="漂移">漂移</button>
+          <button class="tbtn tb-go" data-act="throttle" aria-label="前进">▲</button>
+          <button class="tbtn tb-back" data-act="brake" aria-label="后退">▼</button>
+        </div>
+        <div id="t-right">
+          <button class="tbtn tb-steer" data-act="left" aria-label="左转">◀</button>
+          <button class="tbtn tb-steer" data-act="right" aria-label="右转">▶</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
