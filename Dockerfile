@@ -1,5 +1,5 @@
 # ─── Stage 1: 构建 client ───
-FROM node:24-slim AS builder
+FROM node:22-slim AS builder
 RUN npm install -g pnpm@latest
 WORKDIR /app
 
@@ -16,7 +16,7 @@ COPY . .
 RUN pnpm --filter @fable/client build
 
 # ─── Stage 2: 生产运行 ───
-FROM node:24-slim
+FROM node:22-slim
 
 # pnpm + tsx + nginx（静态文件服务 + WebSocket 代理）
 RUN apt-get update \
