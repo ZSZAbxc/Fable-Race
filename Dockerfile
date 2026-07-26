@@ -37,6 +37,10 @@ RUN pnpm install --frozen-lockfile
 COPY packages/shared/ packages/shared/
 COPY packages/server/ packages/server/
 
+# esbuild 在 target>=ES2022 时会用 TC39 新式装饰器（__decorateElement），
+# 而 @colyseus/schema 需要旧式（__decorate）。降 target 到 ES2021 强制旧式。
+RUN node -e "const f='packages/server/tsconfig.json';const c=JSON.parse(require('fs').readFileSync(f,'utf8'));c.compilerOptions.target='ES2021';require('fs').writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
+
 # 从 builder 复制 client 构建产物
 COPY --from=builder /app/packages/client/dist /usr/share/nginx/html
 
