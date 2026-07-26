@@ -3,7 +3,6 @@ FROM node:22-slim AS builder
 RUN npm install -g pnpm@latest
 WORKDIR /app
 
-# 利用 Docker 缓存：先装依赖，源码改动了才重装
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY package.json ./
 COPY packages/shared/package.json packages/shared/
@@ -11,36 +10,27 @@ COPY packages/server/package.json   packages/server/
 COPY packages/client/package.json   packages/client/
 RUN pnpm install --frozen-lockfile
 
-# 复制全部源码
 COPY . .
 
 # 构建 client
 RUN pnpm --filter @fable/client build
 
-# 编译 shared TypeScript → JS（server 运行时 Node 无法直接加载 .ts）
-RUN npx esbuild packages/shared/src/index.ts \
-    --bundle \
-    --platform=node \
-    --target=es2021 \
-    --format=esm \
-    --external:@dimforge/rapier3d-compat \
-    --outfile=packages/shared/dist/index.mjs \
- && node -e "const f='packages/shared/package.json';const c=JSON.parse(require('fs').readFileSync(f,'utf8'));c.main='./dist/index.mjs';require('fs').writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
-
-# 用 esbuild CLI 编译 server（显式 experimentalDecorators，绕过 tsx/esbuild 0.28 的 bug）
+# esbuild 编译 server：shared 内联，只 external 原生/第三方包
 RUN npx esbuild packages/server/src/index.ts \
     --bundle \
     --platform=node \
     --target=es2021 \
     --format=esm \
-    --packages=external \
+    --external:@colyseus/core \
+    --external:@colyseus/schema \
+    --external:@colyseus/ws-transport \
+    --external:@dimforge/rapier3d-compat \
     --tsconfig-raw='{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}' \
     --outfile=packages/server/dist/server.mjs
 
 # ─── Stage 2: 生产运行 ───
 FROM node:22-slim
 
-# pnpm + nginx
 RUN apt-get update \
  && apt-get install -y nginx \
  && rm -rf /var/lib/apt/lists/* \
@@ -48,18 +38,17 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# 只安装 server 运行时依赖（@colyseus/core 等）
+# 只安装 server 运行时依赖（shared/package.json 让 pnpm 也能解析 rapier 等间接依赖）
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY package.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json   packages/server/
 RUN pnpm install --frozen-lockfile --prod
 
-# 复制 shared 源码 + server.mjs 从 builder（shared 含 dist/ 和修改后的 main）
-COPY --from=builder /app/packages/shared/ packages/shared/
+# 复制编译好的 server.mjs（shared 已内联，无需额外依赖）
 COPY --from=builder /app/packages/server/dist/server.mjs packages/server/dist/server.mjs
 
-# 从 builder 复制 client 构建产物
+# 复制 client 构建产物
 COPY --from=builder /app/packages/client/dist /usr/share/nginx/html
 
 # ── nginx：静态文件精确匹配，其余全部 proxy 到 Colyseus ──
