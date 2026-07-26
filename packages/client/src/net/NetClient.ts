@@ -14,9 +14,11 @@ export class NetClient {
 
   constructor() {
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    const endpoint = location.port
-      ? `${proto}://${location.hostname}:${location.port}`
-      : `${proto}://${location.hostname}`;
+    // 开发环境(localhost) Colyseus 在 2567，生产环境跟页面同端口（nginx 代理）
+    const devPort = (location.hostname === "localhost" || location.hostname === "127.0.0.1")
+      ? `:${DEFAULT_SERVER_PORT}`
+      : (location.port ? `:${location.port}` : "");
+    const endpoint = `${proto}://${location.hostname}${devPort}`;
     this.client = new Client(endpoint);
   }
 
