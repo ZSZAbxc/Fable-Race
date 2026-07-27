@@ -85,7 +85,13 @@ echo "[entry] nginx listening on $LISTEN_PORT"\n\
 sed -i "s/listen 5173/listen $LISTEN_PORT/" /etc/nginx/conf.d/default.conf\n\
 nginx\n\
 echo "[entry] Colyseus starting on 2568"\n\
-cd /app && PORT=2568 exec node packages/server/dist/server.mjs\n' > /entrypoint.sh \
+cd /app && PORT=2568 node packages/server/dist/server.mjs &\n\
+sleep 3\n\
+echo "[diag] testing nginx -> Colyseus: POST /matchmake/create/race"\n\
+curl -sv -X POST -H "Content-Type: application/json" -d "{}" http://127.0.0.1:$LISTEN_PORT/matchmake/create/race 2>&1 || true\n\
+echo "[diag] testing direct Colyseus: POST /matchmake/create/race"\n\
+curl -sv -X POST -H "Content-Type: application/json" -d "{}" http://127.0.0.1:2568/matchmake/create/race 2>&1 || true\n\
+wait\n' > /entrypoint.sh \
  && chmod +x /entrypoint.sh
 
 EXPOSE 5173
