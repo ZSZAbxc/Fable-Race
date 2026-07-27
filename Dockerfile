@@ -31,7 +31,7 @@ RUN npx esbuild packages/server/src/index.ts \
 FROM node:22-slim
 
 RUN apt-get update \
- && apt-get install -y nginx \
+ && apt-get install -y nginx curl \
  && rm -rf /var/lib/apt/lists/* \
  && npm install -g pnpm@latest
 
