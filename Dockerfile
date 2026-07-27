@@ -57,14 +57,11 @@ RUN printf 'map $http_upgrade $connection_upgrade {\n\
 }\n\
 server {\n\
     listen 5173;\n\
-    location /assets/ {\n\
-        root /usr/share/nginx/html;\n\
-    }\n\
-    location = /index.html {\n\
-        root /usr/share/nginx/html;\n\
-    }\n\
+    root /usr/share/nginx/html;\n\
+    location /assets/ { try_files $uri =404; }\n\
+    location /sfx/    { try_files $uri =404; }\n\
+    location = /index.html { }\n\
     location = / {\n\
-        root /usr/share/nginx/html;\n\
         try_files /index.html =404;\n\
     }\n\
     location / {\n\
