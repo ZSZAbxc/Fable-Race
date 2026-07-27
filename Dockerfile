@@ -60,6 +60,7 @@ server {\n\
     root /usr/share/nginx/html;\n\
     location /assets/ { try_files $uri =404; }\n\
     location /sfx/    { try_files $uri =404; }\n\
+    location = /favicon.ico { return 204; }\n\
     location = /index.html { }\n\
     location = / {\n\
         try_files /index.html =404;\n\
